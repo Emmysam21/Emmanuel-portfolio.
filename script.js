@@ -1,3 +1,6 @@
+function isAdmin(){
+  return localStorage.getItem('gh_token');
+}
 // Very simple static uploader + viewer using GitHub repository as storage.
 // WARNING: Keep your token safe. The script stores token in localStorage in your browser only.
 
