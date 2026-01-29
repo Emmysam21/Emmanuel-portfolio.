@@ -1,1 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Emmanuel — Animation Portfolio</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="container">
+    <header class="profile">
+      <img id="profilePic" src="profile.jpg" alt="profile picture" />
+      <h1 id="name">Emmanuel Omotunwase</h1>
+      <p class="role">Animator</p>
+      <section class="about">
+        <h2>About me</h2>
+        <p id="aboutText">I create animations. (Edit this text in the <code>About</code> box below.)</p>
+        <textarea id="aboutEdit" placeholder="Write a short about me..."></textarea>
+        <button id="saveAbout">Save About (commits to repo)</button>
+      </section>
+    </header>
 
+    <section class="settings">
+      <h3>GitHub / Upload settings</h3>
+      <p class="hint">You only need to enter these once in this browser. <strong>Do not share your token.</strong></p>
+      <label>GitHub owner (username or org): <input id="owner" /></label>
+      <label>Repository name: <input id="repo" /></label>
+      <label>Branch (usually <code>main</code>): <input id="branch" value="main" /></label>
+      <label>Personal Access Token (PAT): <input id="token" type="password" /></label>
+      <div class="button-row">
+        <button id="saveSettings">Save Settings</button>
+        <button id="clearSettings">Clear Settings</button>
+      </div>
+    </section>
+
+    <section class="videos">
+      <h2>All animation videos</h2>
+      <div class="upload">
+        <input type="file" id="uploadAllFile" accept="video/*,image/*" />
+        <textarea id="uploadAllDesc" placeholder="Add a description or text to store with this file"></textarea>
+        <button id="uploadAllBtn">Upload to All animation videos</button>
+      </div>
+      <div id="allList" class="list"></div>
+    </section>
+
+    <section class="videos">
+      <h2>Toonboom animation videos</h2>
+      <div class="upload">
+        <input type="file" id="uploadToonFile" accept="video/*,image/*" />
+        <textarea id="uploadToonDesc" placeholder="Add a description or text to store with this file"></textarea>
+        <button id="uploadToonBtn">Upload to Toonboom animation videos</button>
+      </div>
+      <div id="toonList" class="list"></div>
+    </section>
+
+    <footer>
+      <p>Note: uploads save into your repository under <code>uploads/all/</code> and <code>uploads/toonboom/</code>.</p>
+    </footer>
+  </main>
+
+  <script src="script.js"></script>
+</body>
+</html>
