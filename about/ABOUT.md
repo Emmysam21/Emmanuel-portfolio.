@@ -1,0 +1,1 @@
+I’m Emmanuel Omotunwase, a 2D animator and graphic designer with 7 years of experience. I create engaging animations and visuals that bring ideas to life, from YouTube shorts to original projects. Passionate about storytelling through motion, I aim to make every frame count.
