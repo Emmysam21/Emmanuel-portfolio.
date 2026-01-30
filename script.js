@@ -241,20 +241,20 @@ function attachHandlers(){
 }
 
 // On start
-(async function init(){
-  loadSettings();
-  attachHandlers();
-  await renderLists();
+window.addEventListener("load", async () => {
+  try {
+    loadSettings();
+    attachHandlers();
 
-  // Hide admin controls for non-admins
-  if(!isAdmin()){
-    document.querySelectorAll('.admin-controls').forEach(el => el.style.display = 'none');
-  } else {
-    // if admin, copy settings to inputs from storage so UI is filled
-    ['owner','repo','branch','token'].forEach(k=>{
-      const el = $(k);
-      const val = localStorage.getItem('gh_'+k) || '';
-      if(el) el.value = val;
-    });
+    const s = getSettings();
+    if(s.owner && s.repo){
+      await renderLists();
+    }
+
+    if(!isAdmin()){
+      document.querySelectorAll('.admin-controls').forEach(el => el.style.display = 'none');
+    }
+  } catch(e){
+    console.error("Startup error:", e);
   }
-})();
+});
