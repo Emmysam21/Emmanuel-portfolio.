@@ -58,13 +58,29 @@ async function createFile(path, base64content, message){
     alert('Enter and save owner, repo and token first.');
     return false;
   }
-  const url = `https://api.github.com/repos/${encodeURIComponent(s.owner)}/${encodeURIComponent(s.repo)}/contents/${encodeURIComponent(path)}`;
+
+  const apiUrl = `https://api.github.com/repos/${encodeURIComponent(s.owner)}/${encodeURIComponent(s.repo)}/contents/${encodeURIComponent(path)}`;
+
+  // Step 1: Check if file already exists to get SHA
+  let sha = null;
+  const checkRes = await fetch(apiUrl + `?ref=${encodeURIComponent(s.branch)}`, {
+    headers: { Authorization: 'token ' + s.token }
+  });
+
+  if(checkRes.ok){
+    const existing = await checkRes.json();
+    sha = existing.sha;
+  }
+
+  // Step 2: Create OR update file
   const body = {
-    message: message || `Upload ${path}`,
+    message: message || `Update ${path}`,
     content: base64content,
-    branch: s.branch
+    branch: s.branch,
+    ...(sha && { sha }) // include sha only if file exists
   };
-  const res = await fetch(url, {
+
+  const res = await fetch(apiUrl, {
     method: 'PUT',
     headers: {
       Authorization: 'token ' + s.token,
@@ -73,7 +89,9 @@ async function createFile(path, base64content, message){
     },
     body: JSON.stringify(body)
   });
+
   if(res.ok) return true;
+
   const txt = await res.text();
   console.error('createFile error', res.status, txt);
   alert('Upload failed: ' + res.status);
