@@ -216,20 +216,27 @@ $('uploadToonBtn').addEventListener('click', ()=>handleUpload('toonboom','upload
 // initial load
 loadSettings();
 renderLists();
-async function loadVideos(type, containerId){
+async function loadVideos(folder, containerId){
   const owner = localStorage.getItem('gh_owner');
   const repo = localStorage.getItem('gh_repo');
   const branch = localStorage.getItem('gh_branch') || 'main';
 
-  const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/uploads/${type}`);
-  if(!res.ok) return;
+  if(!owner || !repo) return;
+
+  const apiUrl = `https://api.github.com/repos/${owner}/${repo}/contents/uploads/${folder}?ref=${branch}`;
+  const res = await fetch(apiUrl);
+
+  if(!res.ok){
+    console.log("Could not load videos from", folder);
+    return;
+  }
 
   const files = await res.json();
   const container = document.getElementById(containerId);
   container.innerHTML = "";
 
   files.forEach(file => {
-    if(file.name.match(/\.(mp4|webm|ogg)$/i)){
+    if(file.type === "file" && file.name.match(/\.(mp4|webm|ogg)$/i)){
       const video = document.createElement("video");
       video.src = file.download_url;
       video.controls = true;
@@ -241,15 +248,12 @@ async function loadVideos(type, containerId){
 }
 
 window.onload = () => {
-  loadVideos("all", "allVideos");
-  loadVideos("toonboom", "toonVideos");
+  loadVideos("all", "allList");
+  loadVideos("toonboom", "toonList");
 
-  // Hide admin tools if not you
   if(!isAdmin()){
-    document.querySelectorAll('.admin, input, textarea, button')
-      .forEach(el => {
-        if(el.closest('.section')) return; // keep section layout
-        el.style.display = "none";
-      });
+    document.querySelectorAll('.upload').forEach(el => {
+      el.style.display = "none";
+    });
   }
 };
