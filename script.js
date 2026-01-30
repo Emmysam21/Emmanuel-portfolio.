@@ -1,73 +1,67 @@
-function isAdmin(){
-  return localStorage.getItem('gh_token');
-}
-// Very simple static uploader + viewer using GitHub repository as storage.
-// WARNING: Keep your token safe. The script stores token in localStorage in your browser only.
+// Clean single-system uploader + gallery. Replace previous script.js completely.
 
+// admin detection: returns truthy if token saved in localStorage
+function isAdmin(){
+  return !!localStorage.getItem('gh_token');
+}
+
+// small helper
 const $ = id => document.getElementById(id);
 
-// Save/Load settings
+// load/save UI settings from localStorage (keys without gh_ for easy use)
 function loadSettings(){
-  const keys = ['owner','repo','branch','token'];
-  keys.forEach(k => {
+  ['owner','repo','branch','token'].forEach(k=>{
     const val = localStorage.getItem('gh_'+k) || '';
-    $(k).value = val;
+    const el = $(k);
+    if(el) el.value = val;
   });
 
-  // About text
+  // about text (keeps a local copy so we don't need to fetch the repo every time)
   const about = localStorage.getItem('about_text') || 'I create animations.';
-  $('aboutText').textContent = about;
-  $('aboutEdit').value = about;
+  const aboutTextEl = $('aboutText');
+  if(aboutTextEl) aboutTextEl.textContent = about;
+  const aboutEdit = $('aboutEdit');
+  if(aboutEdit) aboutEdit.value = about;
 }
+
 function saveSettings(){
   ['owner','repo','branch','token'].forEach(k=>{
-    localStorage.setItem('gh_'+k, $(k).value.trim());
+    const el = $(k);
+    if(el) localStorage.setItem('gh_'+k, el.value.trim());
   });
-  alert('Settings saved in this browser.');
+  alert('Settings saved to this browser only');
 }
+
 function clearSettings(){
   ['owner','repo','branch','token'].forEach(k=>{
     localStorage.removeItem('gh_'+k);
-    $(k).value = '';
+    const el = $(k);
+    if(el) el.value = '';
   });
-  alert('Settings cleared.');
+  alert('Settings cleared from this browser');
 }
 
-$('saveSettings').addEventListener('click', saveSettings);
-$('clearSettings').addEventListener('click', clearSettings);
-
-$('saveAbout').addEventListener('click', async ()=>{
-  const txt = $('aboutEdit').value.trim();
-  if(!confirm('Save About text to repository? This will create a file about/ABOUT.md')) return;
-  const ok = await createTextFile('about/ABOUT.md', txt, 'Update About text');
-  if(ok) {
-    localStorage.setItem('about_text', txt);
-    $('aboutText').textContent = txt;
-    alert('About text saved.');
-  }
-});
-
-// Upload helpers
+// Build settings object from UI or storage
 function getSettings(){
   return {
-    owner: $('owner').value.trim() || localStorage.getItem('gh_owner') || '',
-    repo: $('repo').value.trim() || localStorage.getItem('gh_repo') || '',
-    branch: $('branch').value.trim() || localStorage.getItem('gh_branch') || 'main',
-    token: $('token').value.trim() || localStorage.getItem('gh_token') || ''
+    owner: ($('owner') && $('owner').value.trim()) || localStorage.getItem('gh_owner') || '',
+    repo: ($('repo') && $('repo').value.trim()) || localStorage.getItem('gh_repo') || '',
+    branch: ($('branch') && $('branch').value.trim()) || localStorage.getItem('gh_branch') || 'main',
+    token: ($('token') && $('token').value.trim()) || localStorage.getItem('gh_token') || ''
   };
 }
 
-// Basic: create a new file at path with base64 content
-async function createFile(path, contentBase64, message){
+// GitHub API: create file (base64 content)
+async function createFile(path, base64content, message){
   const s = getSettings();
   if(!s.owner || !s.repo || !s.token){
-    alert('Enter GitHub owner, repo and token in settings first.');
+    alert('Enter and save owner, repo and token first.');
     return false;
   }
   const url = `https://api.github.com/repos/${encodeURIComponent(s.owner)}/${encodeURIComponent(s.repo)}/contents/${encodeURIComponent(path)}`;
   const body = {
     message: message || `Upload ${path}`,
-    content: contentBase64,
+    content: base64content,
     branch: s.branch
   };
   const res = await fetch(url, {
@@ -81,18 +75,18 @@ async function createFile(path, contentBase64, message){
   });
   if(res.ok) return true;
   const txt = await res.text();
-  console.error('Upload error', res.status, txt);
-  alert('Upload failed: ' + res.status + '. See console for details.');
+  console.error('createFile error', res.status, txt);
+  alert('Upload failed: ' + res.status);
   return false;
 }
 
-// Convenience: create text file
+// convenience for text files
 async function createTextFile(path, text, message){
   const base64 = btoa(unescape(encodeURIComponent(text)));
-  return await createFile(path, base64, message || `Add ${path}`);
+  return await createFile(path, base64, message);
 }
 
-// file -> base64
+// convert File -> base64 string (no data: prefix)
 function fileToBase64(file){
   return new Promise((res, rej)=>{
     const reader = new FileReader();
@@ -105,34 +99,42 @@ function fileToBase64(file){
   });
 }
 
-// Upload handlers
+// handle upload for a folder (all or toonboom)
 async function handleUpload(prefix, fileInputId, descId){
-  const f = $(fileInputId).files[0];
-  if(!f) { alert('Choose a file first'); return; }
-  const desc = $(descId).value || '';
+  const fileEl = $(fileInputId);
+  if(!fileEl || !fileEl.files || !fileEl.files[0]) { alert('Choose a file first'); return; }
+  const f = fileEl.files[0];
+  const desc = ($(descId) && $(descId).value) || '';
+
   if (f.size > 100 * 1024 * 1024) {
-    const ok = confirm('File is larger than 100 MB. GitHub may reject large files. Do you want to continue?');
+    const ok = confirm('File is larger than 100 MB. GitHub may reject large files. Continue?');
     if(!ok) return;
   }
-  const bin = await fileToBase64(f);
+
+  const base64 = await fileToBase64(f);
   const ts = Date.now();
   const safeName = f.name.replace(/\s+/g,'_');
   const path = `uploads/${prefix}/${ts}_${safeName}`;
-  const ok = await createFile(path, bin, `Upload ${safeName} to ${prefix}`);
+  const ok = await createFile(path, base64, `Upload ${safeName} to ${prefix}`);
   if(!ok) return;
-  // add description as JSON meta
+
+  // create small meta JSON
   const meta = {
     filename: `${ts}_${safeName}`,
     original: f.name,
     uploaded_at: new Date().toISOString(),
     description: desc
   };
-  await createTextFile(`uploads/${prefix}/meta_${ts}_${safeName}.json`, JSON.stringify(meta, null, 2), `Add meta for ${safeName}`);
-  alert('Upload complete.');
+  await createTextFile(`uploads/${prefix}/meta_${ts}_${safeName}.json`, JSON.stringify(meta, null, 2), `Meta for ${safeName}`);
+
+  alert('Upload complete');
+  fileEl.value = '';
+  if($(descId)) $(descId).value = '';
+  // re-render lists so new item appears for admin immediately
   await renderLists();
 }
 
-// Render lists by reading repo folder contents (works for public repo without token; token helps for private)
+// Fetch contents from a repo folder using GitHub contents API
 async function fetchFolderContents(path){
   const s = getSettings();
   const url = `https://api.github.com/repos/${encodeURIComponent(s.owner)}/${encodeURIComponent(s.repo)}/contents/${encodeURIComponent(path)}?ref=${encodeURIComponent(s.branch)}`;
@@ -140,120 +142,119 @@ async function fetchFolderContents(path){
   const res = await fetch(url, { headers });
   if(res.status === 404) return [];
   if(!res.ok){
-    console.error('list error', res.status, await res.text());
+    console.error('fetchFolderContents error', res.status, await res.text());
     return [];
   }
   const data = await res.json();
   return Array.isArray(data) ? data : [];
 }
 
+// Render listing for a folder into containerId
 async function renderListFor(prefix, containerId){
   const items = await fetchFolderContents(`uploads/${prefix}`);
   const container = $(containerId);
+  if(!container) return;
   container.innerHTML = '';
-  // Group video/media files and lookup meta json
-  const media = items.filter(i => i.type === 'file' && !i.name.startsWith('meta_')).sort((a,b)=>b.name.localeCompare(a.name));
-  for(const file of media){
-    const raw = `https://raw.githubusercontent.com/${getSettings().owner}/${getSettings().repo}/${getSettings().branch}/${file.path}`;
-    // try to find meta by name prefix
-    const metaName = items.find(m=>m.name.startsWith('meta_') && m.name.includes(file.name));
-    let desc = '';
-    if(metaName){
-      try{
-        const metaRes = await fetch(metaName.url, getSettings().token ? { headers: { Authorization: 'token ' + getSettings().token }} : {});
-        if(metaRes.ok){
-          const meta = await metaRes.json();
-          // meta content is base64, but when using contents API it returns "content" base64
-          if(meta.content){
-            const txt = atob(meta.content.replace(/\n/g,''));
-            const parsed = JSON.parse(txt);
-            desc = parsed.description || '';
-          }
-        }
-      }catch(e){ console.warn('meta read', e) }
-    }
-    // create element
+
+  // filter files (skip meta jsons)
+  const mediaFiles = items.filter(i => i.type === 'file' && !i.name.startsWith('meta_'))
+                          .sort((a,b)=>b.name.localeCompare(a.name));
+
+  for(const file of mediaFiles){
     const div = document.createElement('div');
     div.className = 'item';
-    // if video extension
+
+    // show video if suitable, otherwise image or link
     if(/\.(mp4|webm|ogg)$/i.test(file.name)){
       const v = document.createElement('video');
+      // API response provides download_url on each file object
+      v.src = file.download_url || `https://raw.githubusercontent.com/${getSettings().owner}/${getSettings().repo}/${getSettings().branch}/${file.path}`;
       v.controls = true;
-      v.src = raw;
       v.setAttribute('playsinline','');
+      v.style.width = '100%';
       div.appendChild(v);
     } else if(/\.(jpe?g|png|gif|svg)$/i.test(file.name)){
-      const i = document.createElement('img');
-      i.src = raw;
-      i.alt = file.name;
-      div.appendChild(i);
+      const img = document.createElement('img');
+      img.src = file.download_url || `https://raw.githubusercontent.com/${getSettings().owner}/${getSettings().repo}/${getSettings().branch}/${file.path}`;
+      img.alt = file.name;
+      div.appendChild(img);
     } else {
       const a = document.createElement('a');
-      a.href = raw;
+      a.href = file.download_url || `https://raw.githubusercontent.com/${getSettings().owner}/${getSettings().repo}/${getSettings().branch}/${file.path}`;
       a.textContent = file.name;
       a.target = '_blank';
       div.appendChild(a);
     }
-    if(desc){
-      const p = document.createElement('div');
-      p.className='desc';
-      p.textContent = desc;
-      div.appendChild(p);
+
+    // attempt to find matching meta JSON and display description
+    const meta = items.find(m => m.type === 'file' && m.name.startsWith('meta_') && m.name.includes(file.name));
+    if(meta){
+      try{
+        // fetch meta content using the contents API URL (meta.url)
+        const metaRes = await fetch(meta.url, getSettings().token ? { headers: { Authorization: 'token ' + getSettings().token } } : {});
+        if(metaRes.ok){
+          const metaJson = await metaRes.json();
+          if(metaJson.content){
+            const txt = atob(metaJson.content.replace(/\n/g,''));
+            const parsed = JSON.parse(txt);
+            if(parsed.description){
+              const p = document.createElement('div');
+              p.className = 'desc';
+              p.textContent = parsed.description;
+              div.appendChild(p);
+            }
+          }
+        }
+      }catch(e){ console.warn('meta read error', e) }
     }
+
     container.appendChild(div);
   }
 }
 
+// Re-render both lists
 async function renderLists(){
   await renderListFor('all','allList');
   await renderListFor('toonboom','toonList');
 }
 
-// Hook upload buttons
-$('uploadAllBtn').addEventListener('click', ()=>handleUpload('all','uploadAllFile','uploadAllDesc'));
-$('uploadToonBtn').addEventListener('click', ()=>handleUpload('toonboom','uploadToonFile','uploadToonDesc'));
-
-// initial load
-loadSettings();
-renderLists();
-async function loadVideos(folder, containerId){
-  const owner = localStorage.getItem('gh_owner');
-  const repo = localStorage.getItem('gh_repo');
-  const branch = localStorage.getItem('gh_branch') || 'main';
-
-  if(!owner || !repo) return;
-
-  const apiUrl = `https://api.github.com/repos/${owner}/${repo}/contents/uploads/${folder}?ref=${branch}`;
-  const res = await fetch(apiUrl);
-
-  if(!res.ok){
-    console.log("Could not load videos from", folder);
-    return;
-  }
-
-  const files = await res.json();
-  const container = document.getElementById(containerId);
-  container.innerHTML = "";
-
-  files.forEach(file => {
-    if(file.type === "file" && file.name.match(/\.(mp4|webm|ogg)$/i)){
-      const video = document.createElement("video");
-      video.src = file.download_url;
-      video.controls = true;
-      video.style.width = "100%";
-      video.style.marginTop = "10px";
-      container.appendChild(video);
-    }
+// Hook buttons after DOM loaded
+function attachHandlers(){
+  const saveBtn = $('saveSettings');
+  if(saveBtn) saveBtn.addEventListener('click', saveSettings);
+  const clearBtn = $('clearSettings');
+  if(clearBtn) clearBtn.addEventListener('click', clearSettings);
+  const saveAboutBtn = $('saveAbout');
+  if(saveAboutBtn) saveAboutBtn.addEventListener('click', async ()=>{
+    const txt = ($('aboutEdit') && $('aboutEdit').value.trim()) || '';
+    if(!confirm('Save About text to this device and (optionally) to repository? Click OK to save locally.')) return;
+    localStorage.setItem('about_text', txt);
+    if($('aboutText')) $('aboutText').textContent = txt;
+    // also save a copy in repo (optional)
+    const ok = await createTextFile('about/ABOUT.md', txt, 'Update About text');
+    if(ok) alert('About saved to repository too.');
   });
+  const upAll = $('uploadAllBtn');
+  if(upAll) upAll.addEventListener('click', ()=>handleUpload('all','uploadAllFile','uploadAllDesc'));
+  const upToon = $('uploadToonBtn');
+  if(upToon) upToon.addEventListener('click', ()=>handleUpload('toonboom','uploadToonFile','uploadToonDesc'));
 }
 
-window.onload = () => {
-  loadVideos("all", "allList");
-  loadVideos("toonboom", "toonList");
+// On start
+(async function init(){
+  loadSettings();
+  attachHandlers();
+  await renderLists();
 
+  // Hide admin controls for non-admins
   if(!isAdmin()){
-    document.querySelectorAll('.upload').forEach(el => {
-      el.style.display = "none";
+    document.querySelectorAll('.admin-controls').forEach(el => el.style.display = 'none');
+  } else {
+    // if admin, copy settings to inputs from storage so UI is filled
+    ['owner','repo','branch','token'].forEach(k=>{
+      const el = $(k);
+      const val = localStorage.getItem('gh_'+k) || '';
+      if(el) el.value = val;
     });
   }
-};
+})();
